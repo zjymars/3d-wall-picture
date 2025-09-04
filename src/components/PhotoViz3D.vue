@@ -78,7 +78,10 @@
                 {{ tag }}
               </span>
             </div>
-            <div class="detail-date">{{ selectedPhoto.date }}</div>
+            <div style="display: flex; justify-content: space-between;">
+              <div class="detail-date">{{ selectedPhoto.date }}</div>
+              <button class="select-btn" @click="handleSelectPhoto">选择</button>
+            </div>
           </div>
         </div>
       </div>
@@ -681,6 +684,15 @@ onUnmounted(() => {
     renderer.dispose()
   }
 })
+
+
+const handleSelectPhoto = () => {
+  if (selectedPhoto.value) {
+    window.parent.postMessage({
+      imageId: selectedPhoto.value.id
+    }, '*')
+  }
+}
 </script>
 
 <style scoped>
