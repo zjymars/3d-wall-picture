@@ -78,7 +78,7 @@
                 {{ tag }}
               </span>
             </div>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
               <div class="detail-date">{{ selectedPhoto.date }}</div>
               <button class="select-btn" @click="handleSelectPhoto">选择</button>
             </div>
@@ -995,6 +995,21 @@ canvas:active {
   font-size: 12px;
   color: #888;
   text-align: right;
+}
+
+.select-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.select-btn:hover {
+  background: #45a049;
 }
 
 /* 响应式设计 */
