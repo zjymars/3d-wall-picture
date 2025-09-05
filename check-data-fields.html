@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>检查数据字段</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .field-check { margin-bottom: 10px; padding: 8px; border-radius: 4px; }
+        .has-field { background: #e8f5e8; color: #2e7d32; }
+        .missing-field { background: #ffebee; color: #f44336; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 检查数据字段</h1>
+        
+        <div class="section">
+            <h3>🎯 检查说明</h3>
+            <p>这个页面检查本地存储的图片数据是否包含新的元数据字段。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 检查操作</h3>
+            <button onclick="checkFields()">检查字段</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function checkFields() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🔍 字段检查</h3><p>正在检查...</p></div>';
+            
+            try {
+                // 检查localStorage
+                const stored = localStorage.getItem('image_storage');
+                const images = stored ? JSON.parse(stored) : [];
+                
+                if (images.length === 0) {
+                    resultsDiv.innerHTML = '<div class="section"><h3>🔍 字段检查</h3><div class="missing-field">localStorage中没有图片数据</div></div>';
+                    return;
+                }
+                
+                const firstImage = images[0];
+                const requiredFields = [
+                    'original_filename',
+                    'format', 
+                    'width',
+                    'height',
+                    'type_tags',
+                    'phrase_tags'
+                ];
+                
+                let html = '<div class="section"><h3>🔍 字段检查结果</h3>';
+                
+                requiredFields.forEach(field => {
+                    const hasField = firstImage.hasOwnProperty(field) && firstImage[field] !== undefined && firstImage[field] !== null;
+                    const status = hasField ? 'has-field' : 'missing-field';
+                    const icon = hasField ? '✅' : '❌';
+                    const value = hasField ? JSON.stringify(firstImage[field]) : '缺失';
+                    
+                    html += `<div class="field-check ${status}">
+                        ${icon} ${field}: ${value}
+                    </div>`;
+                });
+                
+                html += '<h4>📄 完整数据:</h4>';
+                html += `<pre>${JSON.stringify(firstImage, null, 2)}</pre>`;
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🔍 字段检查</h3><div class="missing-field">检查失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            console.log('🔍 字段检查页面已加载');
+            setTimeout(() => {
+                checkFields();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

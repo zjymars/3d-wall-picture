@@ -14,6 +14,12 @@ export interface Photo {
   height?: number
   format?: string
   source_website?: string
+  // 新增的元数据字段
+  filename?: string
+  original_filename?: string
+  unique_id?: number
+  type_tags?: string[]
+  phrase_tags?: string[]
 }
 
 export interface NodePosition {
@@ -216,24 +222,37 @@ export const usePhotoStore = defineStore('photo', () => {
 
 
 
-  // 搜索图片（在本地存储中搜索）
+  // 搜索图片（在本地存储中搜索）- 增强版
   const searchImages = async (keyword: string) => {
     try {
       setIsFetching(true)
       setCaption(`正在搜索 "${keyword}" 相关的图片...`)
       
       // 在本地存储中搜索
-      const searchResults = await indexedDBImageStorage.searchImages(keyword)
+      const searchResult = await indexedDBImageStorage.searchImages(keyword)
+      const { results: searchResults, stats } = searchResult
       
       if (searchResults.length === 0) {
-        setCaption(`未找到与 "${keyword}" 相关的图片`)
+        setCaption(`未找到与 "${keyword}" 相关的图片 (共搜索 ${stats.totalImages} 张图片)`)
         setImages([])
         return
       }
       
       const convertedResults = searchResults.map(img => indexedDBImageStorage.toPhotoFormat(img))
       setImages(convertedResults)
-      setCaption(`找到 ${convertedResults.length} 张与 "${keyword}" 相关的图片`)
+      
+      // 显示详细的搜索统计信息
+      const hitRate = ((stats.matchedImages / stats.totalImages) * 100).toFixed(1)
+      setCaption(`找到 ${stats.matchedImages} 张相关图片 (命中率: ${hitRate}%, 搜索耗时: ${stats.searchTime}ms)`)
+      
+      console.log('🔍 [搜索统计]', {
+        keyword,
+        totalImages: stats.totalImages,
+        matchedImages: stats.matchedImages,
+        hitRate: `${hitRate}%`,
+        searchTime: `${stats.searchTime}ms`,
+        keywords: stats.searchKeywords
+      })
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '搜索失败'
@@ -291,6 +310,79 @@ export const usePhotoStore = defineStore('photo', () => {
   // 手动同步
   const manualSync = async () => {
     return await syncWithServer()
+  }
+
+  // 清空并重新同步
+  const clearAndSync = async (): Promise<SyncResult> => {
+    console.log('🔄 [清空同步] clearAndSync方法被调用')
+    console.log('🔄 [清空同步] 开始清空本地存储并重新同步...')
+    try {
+      isSyncing.value = true
+      setCaption('正在清空本地存储并重新同步图片...')
+      syncStatus.value = '正在清空并重新同步...'
+
+      // 步骤1: 清空本地存储
+      console.log('🗑️ [清空同步] 步骤1: 清空本地存储...')
+      try {
+        await indexedDBImageStorage.clearAllImages()
+        console.log('✅ [清空同步] 本地存储已清空')
+        
+        // 验证清空是否成功
+        const remainingImages = await indexedDBImageStorage.getAllImages()
+        console.log(`🔍 [清空同步] 验证清空结果: 剩余 ${remainingImages.length} 张图片`)
+        
+        if (remainingImages.length > 0) {
+          console.warn('⚠️ [清空同步] 清空后仍有图片残留，可能需要重试')
+        }
+      } catch (clearError) {
+        console.error('❌ [清空同步] 清空本地存储失败:', clearError)
+        throw new Error(`清空本地存储失败: ${clearError instanceof Error ? clearError.message : '未知错误'}`)
+      }
+
+      // 步骤2: 重新同步
+      console.log('🔄 [清空同步] 步骤2: 重新同步...')
+      let result
+      try {
+        result = await imageSyncService.syncImages({
+          batchSize: 50,
+          maxImages: 1000,
+          clearLocal: true // 强制清空，确保同步服务知道要清空
+        })
+        console.log('📊 [清空同步] 重新同步结果:', result)
+      } catch (syncError) {
+        console.error('❌ [清空同步] 重新同步失败:', syncError)
+        throw new Error(`重新同步失败: ${syncError instanceof Error ? syncError.message : '未知错误'}`)
+      }
+
+      // 步骤3: 检查同步结果
+      if (result.success) {
+        console.log('✅ [清空同步] 同步成功，开始加载图片到内存...')
+        try {
+          // 重新加载图片到内存
+          await loadImagesFromLocal()
+          setCaption(`清空并重新同步完成，共${result.totalImages}张图片`)
+          syncStatus.value = '清空并重新同步完成'
+          console.log('🎉 [清空同步] 清空并重新同步完成')
+        } catch (loadError) {
+          console.error('❌ [清空同步] 加载图片到内存失败:', loadError)
+          throw new Error(`加载图片到内存失败: ${loadError instanceof Error ? loadError.message : '未知错误'}`)
+        }
+      } else {
+        console.error('❌ [清空同步] 同步失败:', result.error)
+        setCaption('清空并重新同步失败')
+        syncStatus.value = '清空并重新同步失败'
+        throw new Error(result.error || '清空并重新同步失败')
+      }
+
+      return result
+    } catch (error) {
+      console.error('❌ [清空同步] 清空并重新同步失败:', error)
+      setCaption('清空并重新同步失败')
+      syncStatus.value = '清空并重新同步失败'
+      throw error
+    } finally {
+      isSyncing.value = false
+    }
   }
 
   // 获取存储统计信息
@@ -413,6 +505,7 @@ export const usePhotoStore = defineStore('photo', () => {
     loadRandomImagesFor3D,
     loadAllImagesFor2D,
     manualSync,
+    clearAndSync,
     getStorageStats,
     showIndexedDBStats
   }

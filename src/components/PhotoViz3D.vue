@@ -26,6 +26,14 @@
     <!-- 正常内容 -->
     <div v-if="!isLoading && !error">
       
+      <!-- 搜索状态显示 -->
+      <div v-if="store.caption" class="search-status">
+        <div class="status-content">
+          <span class="status-icon">🔍</span>
+          <span class="status-text">{{ store.caption }}</span>
+        </div>
+      </div>
+      
       <div class="controls-3d">
         <div class="control-group">
           <label>相机距离:</label>
@@ -51,8 +59,8 @@
           <span>{{ (rotationSpeed * 1000).toFixed(1) }}</span>
         </div>
         
-        <button @click="resetCamera" class="reset-btn">
-          重置相机
+        <button @click="updateImages" class="update-btn">
+          更新图片
         </button>
         
         <div class="help-text">
@@ -65,19 +73,46 @@
       <!-- 照片详情面板 -->
       <div v-if="selectedPhoto" class="photo-detail-panel">
         <div class="panel-header">
-          <h3>{{ selectedPhoto.title }}</h3>
+          <h3>{{ decodeUnicode(selectedPhoto.original_filename) || selectedPhoto.filename || selectedPhoto.title || '未知' }}</h3>
           <button @click="closeDetailPanel" class="close-btn">×</button>
         </div>
         
         <div class="panel-content">
           <img :src="selectedPhoto.url" :alt="selectedPhoto.title" class="detail-image" />
           <div class="detail-info">
-            <p class="detail-description">{{ selectedPhoto.description }}</p>
-            <div class="detail-tags">
-              <span v-for="tag in selectedPhoto.tags" :key="tag" class="detail-tag">
-                {{ tag }}
-              </span>
+            <!-- 标签 -->
+            <div class="metadata-section">
+              <div class="metadata-item">
+                <span class="metadata-key">标签:</span>
+                <div class="detail-tags">
+                  <span v-for="tag in (selectedPhoto.type_tags || selectedPhoto.tags?.slice(0, 5) || [])" :key="tag" class="detail-tag type-tag">
+                    {{ tag }}
+                  </span>
+                  <span v-if="(!selectedPhoto.type_tags || selectedPhoto.type_tags.length === 0) && (!selectedPhoto.tags || selectedPhoto.tags.length === 0)" class="tag-more">
+                    无标签
+                  </span>
+                </div>
+              </div>
             </div>
+            
+            <!-- 简介 -->
+            <div class="metadata-section">
+              <div class="metadata-item">
+                <span class="metadata-key">简介:</span>
+                <div class="detail-tags">
+                  <span v-for="tag in (selectedPhoto.phrase_tags || []).slice(0, 5)" :key="tag" class="detail-tag phrase-tag">
+                    {{ tag }}
+                  </span>
+                  <span v-if="selectedPhoto.phrase_tags && selectedPhoto.phrase_tags.length > 5" class="tag-more">
+                    +{{ selectedPhoto.phrase_tags.length - 5 }} 更多
+                  </span>
+                  <span v-if="!selectedPhoto.phrase_tags || selectedPhoto.phrase_tags.length === 0" class="tag-more">
+                    无标签
+                  </span>
+                </div>
+              </div>
+            </div>
+            
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div class="detail-date">{{ selectedPhoto.date }}</div>
               <button class="select-btn" @click="handleSelectPhoto">选择</button>
@@ -227,10 +262,10 @@ const createPhotoMeshes = async () => {
   
   // 第一步：立即创建带有占位符纹理的模型
   console.log('🚀 [3D渲染] 第一步：创建占位符模型...')
-    const geometry = new THREE.PlaneGeometry(1.5, 1.5)
+    const geometry = new THREE.PlaneGeometry(2.5, 2.5)
     
-  // 创建占位符纹理
-  const placeholderTexture = new THREE.TextureLoader().load('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjNjY2NjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+5Yqg6L295LitLi4uPC90ZXh0Pjwvc3ZnPg==')
+  // 创建占位符纹理 - 改进版本
+  const placeholderTexture = new THREE.TextureLoader().load('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMzMzMzMzM7c3RvcC1vcGFjaXR5OjEiIC8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNDQ0NDQ0O3N0b3Atb3BhY2l0eToxIiAvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSJ1cmwoI2cpIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSIyMCIgZmlsbD0iIzY2NjY2NiI+PGFuaW1hdGUgYXR0cmlidXRlTmFtZT0icngiIHZhbHVlcz0iMjA7MzA7MjAiIGR1cj0iMXMiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIi8+PC9jaXJjbGU+PHRleHQgeD0iMTAwIiB5PSIxNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+5Yqg6L295LitLi4uPC90ZXh0Pjwvc3ZnPg==')
   placeholderTexture.generateMipmaps = false
   placeholderTexture.minFilter = THREE.LinearFilter
   placeholderTexture.magFilter = THREE.LinearFilter
@@ -280,18 +315,35 @@ const createPhotoMeshes = async () => {
 const loadTexturesAsync = async (displayImages: any[]) => {
   console.log(`🖼️ [3D渲染] 开始异步加载 ${displayImages.length} 张图片纹理...`)
   
-  const loadTexture = (photo: any, index: number) => {
+  const loadTexture = (photo: any, index: number, retryCount = 0) => {
     return new Promise<THREE.Texture>((resolve, reject) => {
       // 检查缓存
       if (textureCache.has(photo.url)) {
-        resolve(textureCache.get(photo.url)!)
+        const cachedTexture = textureCache.get(photo.url)!
+        // 立即替换对应模型的纹理
+        if (photoMeshes[index]) {
+          const material = photoMeshes[index].material as THREE.MeshLambertMaterial
+          material.map = cachedTexture
+          material.needsUpdate = true
+          console.log(`🔄 [3D渲染] 使用缓存纹理替换第 ${index + 1} 张图片`)
+        }
+        resolve(cachedTexture)
         return
       }
       
       const textureLoader = new THREE.TextureLoader()
+      
+      // 设置超时时间
+      const timeout = setTimeout(() => {
+        console.warn(`⏰ [3D渲染] 第 ${index + 1} 张图片加载超时`)
+        reject(new Error('加载超时'))
+      }, 10000) // 10秒超时
+      
       textureLoader.load(
         photo.url,
         (texture) => {
+          clearTimeout(timeout)
+          
           // 优化纹理设置
           texture.generateMipmaps = false
           texture.minFilter = THREE.LinearFilter
@@ -314,44 +366,95 @@ const loadTexturesAsync = async (displayImages: any[]) => {
         },
         undefined,
         (error) => {
-          console.warn(`⚠️ [3D渲染] 第 ${index + 1} 张图片加载失败:`, error)
-          reject(error)
+          clearTimeout(timeout)
+          console.warn(`⚠️ [3D渲染] 第 ${index + 1} 张图片加载失败 (尝试 ${retryCount + 1}/3):`, error)
+          
+          // 重试机制：最多重试3次
+          if (retryCount < 2) {
+            console.log(`🔄 [3D渲染] 重试加载第 ${index + 1} 张图片...`)
+            setTimeout(() => {
+              loadTexture(photo, index, retryCount + 1)
+                .then(resolve)
+                .catch(reject)
+            }, 1000 * (retryCount + 1)) // 递增延迟
+          } else {
+            // 最终失败，使用占位符
+            console.error(`❌ [3D渲染] 第 ${index + 1} 张图片最终加载失败，保持占位符`)
+            reject(error)
+          }
         }
       )
     })
   }
   
-  // 批量加载纹理，每批10张
-  const batchSize = 10
+  // 批量加载纹理，每批5张（减少批次大小）
+  const batchSize = 5
+  let successCount = 0
+  let failCount = 0
+  
   for (let i = 0; i < displayImages.length; i += batchSize) {
     const batch = displayImages.slice(i, i + batchSize)
     const batchPromises = batch.map((photo, batchIndex) => 
-      loadTexture(photo, i + batchIndex)
+      loadTexture(photo, i + batchIndex).catch(error => {
+        failCount++
+        console.warn(`❌ [3D渲染] 批次中第 ${i + batchIndex + 1} 张图片加载失败:`, error)
+        return null // 返回null表示失败
+      })
     )
     
     try {
-      await Promise.all(batchPromises)
-      console.log(`📦 [3D渲染] 批次 ${Math.floor(i / batchSize) + 1}/${Math.ceil(displayImages.length / batchSize)} 加载完成`)
+      const results = await Promise.all(batchPromises)
+      const batchSuccess = results.filter(result => result !== null).length
+      successCount += batchSuccess
+      
+      console.log(`📦 [3D渲染] 批次 ${Math.floor(i / batchSize) + 1}/${Math.ceil(displayImages.length / batchSize)} 完成: ${batchSuccess}/${batch.length} 成功`)
     } catch (error) {
-      console.warn(`⚠️ [3D渲染] 批次 ${Math.floor(i / batchSize) + 1} 部分加载失败:`, error)
+      console.warn(`⚠️ [3D渲染] 批次 ${Math.floor(i / batchSize) + 1} 处理异常:`, error)
     }
     
     // 短暂延迟，避免阻塞UI
     if (i + batchSize < displayImages.length) {
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
   }
   
-  console.log(`✅ [3D渲染] 所有纹理加载完成！`)
+  console.log(`✅ [3D渲染] 纹理加载完成！成功: ${successCount}, 失败: ${failCount}`)
 }
 
 // 动画循环
 const animate = () => {
   animationId = requestAnimationFrame(animate)
   
+  // 详细的安全检查和调试信息
+  const debugInfo = {
+    frame: animationId,
+    timestamp: Date.now(),
+    group: !!group,
+    camera: !!camera,
+    renderer: !!renderer,
+    scene: !!scene,
+    photoMeshesCount: photoMeshes.length,
+    groupChildrenCount: group ? group.children.length : 0,
+    isAutoRotating: isAutoRotating.value,
+    rotationSpeed: rotationSpeed.value,
+    isMouseDown: isMouseDown,
+    isDetailPanelOpen: isDetailPanelOpen,
+    groupRotation: group ? { x: group.rotation.x, y: group.rotation.y, z: group.rotation.z } : null
+  }
+  
+  // 每30帧输出一次详细调试信息
+  if (animationId % 30 === 0) {
+    console.log(`🎬 [动画循环] 详细状态:`, debugInfo)
+  }
+  
   // 安全检查：确保3D场景已经初始化
   if (!group || !camera || !renderer || !scene) {
-    console.warn('⚠️ [动画循环] 3D场景对象缺失，跳过渲染')
+    console.error('❌ [动画循环] 3D场景对象缺失:', {
+      group: !!group,
+      camera: !!camera,
+      renderer: !!renderer,
+      scene: !!scene
+    })
     return
   }
   
@@ -367,34 +470,71 @@ const animate = () => {
     return
   }
   
+  // 测试：检查渲染器状态
+  if (!renderer.domElement || !renderer.domElement.parentNode) {
+    console.error('❌ [动画循环] 渲染器DOM元素异常')
+    return
+  }
+  
+  // 测试：检查相机位置
+  if (!camera.position || isNaN(camera.position.x)) {
+    console.error('❌ [动画循环] 相机位置异常:', camera.position)
+    return
+  }
+  
   if (isMouseDown) {
     isAutoRotating.value = false
     group.rotation.x += (targetRotationX - group.rotation.x) * 0.1
     group.rotation.y += (targetRotationY - group.rotation.y) * 0.1
-  } else if (isAutoRotating.value) {
+  } else if (isAutoRotating.value && rotationSpeed.value > 0) {
     group.rotation.y += rotationSpeed.value
   }
   
   // 让所有网格面向相机
-  photoMeshes.forEach(mesh => {
+  photoMeshes.forEach((mesh, index) => {
+    if (mesh && mesh.lookAt && camera && camera.position) {
       mesh.lookAt(camera.position)
-    })
+    } else {
+      console.warn(`⚠️ [动画循环] 网格 ${index} 或相机异常`)
+    }
+  })
   
-  renderer.render(scene, camera)
+  // 测试：检查渲染前的状态
+  try {
+    renderer.render(scene, camera)
+    
+    // 每100帧检查一次渲染结果
+    if (animationId % 100 === 0) {
+      console.log(`✅ [动画循环] 渲染成功，帧: ${animationId}`)
+    }
+  } catch (error) {
+    console.error('❌ [动画循环] 渲染失败:', error)
+  }
 }
 
-// 重置相机
-const resetCamera = () => {
-  if (!camera || !group) {
-    console.warn('相机或场景组未初始化，无法重置')
-    return
-  }
+
+
+
+
+// 更新图片
+const updateImages = async () => {
+  console.log('🔄 [更新图片] 开始更新3D视图中的图片...')
   
-  camera.position.set(0, -2, cameraDistance.value)
-  group.rotation.set(0, 0, 0)
-  targetRotationX = 0
-  targetRotationY = 0
-  isAutoRotating.value = true
+  try {
+    // 清理纹理缓存，避免缓存问题
+    console.log('🧹 [更新图片] 清理纹理缓存...')
+    textureCache.forEach((texture) => {
+      texture.dispose()
+    })
+    textureCache.clear()
+    
+    // 重新加载随机图片
+    await store.loadRandomImagesFor3D(120)
+    
+    console.log('✅ [更新图片] 成功更新图片')
+  } catch (error) {
+    console.error('❌ [更新图片] 更新图片失败:', error)
+  }
 }
 
 // 重试加载
@@ -591,15 +731,61 @@ watch(xRayMode, (mode) => {
   })
 })
 
-// 监听旋转速度变化，修复矩阵状态问题
-watch(rotationSpeed, (newSpeed) => {
-  console.log(`🔄 [旋转速度] 旋转速度变化: ${newSpeed}`)
+// 监听旋转速度变化
+watch(rotationSpeed, (newSpeed, oldSpeed) => {
+  console.log(`🔄 [旋转速度] 旋转速度变化: ${oldSpeed} -> ${newSpeed}`)
+  
+  // 详细的状态检查
+  const stateCheck = {
+    timestamp: Date.now(),
+    newSpeed,
+    oldSpeed,
+    group: !!group,
+    camera: !!camera,
+    renderer: !!renderer,
+    scene: !!scene,
+    photoMeshesCount: photoMeshes.length,
+    groupChildrenCount: group ? group.children.length : 0,
+    isAutoRotating: isAutoRotating.value,
+    isMouseDown: isMouseDown,
+    isDetailPanelOpen: isDetailPanelOpen,
+    animationId: animationId
+  }
+  
+  console.log(`🔍 [旋转速度] 状态检查:`, stateCheck)
   
   // 检查3D场景是否已经初始化
   if (!group || !camera || !renderer || !scene) {
-    console.warn('⚠️ [旋转速度] 3D场景未初始化，跳过处理')
+    console.error('❌ [旋转速度] 3D场景未初始化:', {
+      group: !!group,
+      camera: !!camera,
+      renderer: !!renderer,
+      scene: !!scene
+    })
     return
   }
+  
+  // 检查关键状态
+  if (group.children.length === 0) {
+    console.warn('⚠️ [旋转速度] 组中没有子对象')
+  }
+  
+  if (!group.visible) {
+    console.warn('⚠️ [旋转速度] 组不可见')
+  }
+  
+  if (photoMeshes.length === 0) {
+    console.warn('⚠️ [旋转速度] 没有照片网格')
+  }
+  
+  // 记录相机和组的位置信息
+  console.log('📷 [旋转速度] 相机和组位置:', {
+    cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+    groupPosition: { x: group.position.x, y: group.position.y, z: group.position.z },
+    groupRotation: { x: group.rotation.x, y: group.rotation.y, z: group.rotation.z },
+    groupVisible: group.visible,
+    groupScale: { x: group.scale.x, y: group.scale.y, z: group.scale.z }
+  })
   
   // 检查图片网格是否存在
   if (!photoMeshes.length) {
@@ -613,15 +799,67 @@ watch(rotationSpeed, (newSpeed) => {
     return
   }
   
-  // 强制更新矩阵
-  group.updateMatrix()
-  group.updateMatrixWorld()
-  
-  // 强制渲染
-  if (renderer && scene && camera) {
-    console.log(`🎨 [旋转速度] 强制重新渲染...`)
-    renderer.render(scene, camera)
+  // 测试：检查动画循环是否还在运行
+  if (!animationId) {
+    console.error('❌ [旋转速度] 动画循环未运行，尝试重启...')
+    animate()
   }
+  
+  // 确保自动旋转状态正确
+  if (newSpeed > 0 && !isAutoRotating.value) {
+    console.log(`🔄 [旋转速度] 恢复自动旋转`)
+    isAutoRotating.value = true
+  } else if (newSpeed === 0 && isAutoRotating.value) {
+    console.log(`🔄 [旋转速度] 停止自动旋转`)
+    isAutoRotating.value = false
+  }
+  
+  // 测试：检查渲染器状态
+  if (!renderer.domElement || !renderer.domElement.parentNode) {
+    console.error('❌ [旋转速度] 渲染器DOM元素异常')
+    return
+  }
+  
+  // 测试：检查相机状态
+  if (!camera.position || isNaN(camera.position.x)) {
+    console.error('❌ [旋转速度] 相机位置异常:', camera.position)
+    return
+  }
+  
+  // 只更新矩阵，不强制渲染（让动画循环处理渲染）
+  try {
+    group.updateMatrix()
+    group.updateMatrixWorld()
+    console.log(`✅ [旋转速度] 矩阵更新成功`)
+  } catch (error) {
+    console.error('❌ [旋转速度] 矩阵更新失败:', error)
+  }
+  
+  // 测试：手动触发一次渲染来验证状态
+  setTimeout(() => {
+    try {
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera)
+        console.log(`🧪 [旋转速度] 测试渲染成功`)
+        
+        // 检查渲染后的状态
+        console.log(`🔍 [旋转速度] 渲染后检查:`, {
+          groupVisible: group.visible,
+          groupChildrenVisible: group.children.filter(child => child.visible).length,
+          sceneChildrenCount: scene.children.length,
+          rendererInfo: {
+            domElement: !!renderer.domElement,
+            parentNode: !!renderer.domElement?.parentNode,
+            size: renderer.getSize(new THREE.Vector2())
+          }
+        })
+      }
+    } catch (error) {
+      console.error('❌ [旋转速度] 测试渲染失败:', error)
+    }
+  }, 100)
+  
+  console.log(`✅ [旋转速度] 旋转速度已更新为: ${newSpeed}`)
 })
 
 // 监听选中照片变化，控制旋转暂停
@@ -656,12 +894,15 @@ onMounted(() => {
     canvas.value.addEventListener('mouseleave', handleMouseLeave)
     canvas.value.addEventListener('dblclick', handleDoubleClick)
   }
+  
 })
+
 
 onUnmounted(() => {
   if (animationId) {
     cancelAnimationFrame(animationId)
   }
+  
   
   window.removeEventListener('resize', handleResize)
   if (canvas.value) {
@@ -692,6 +933,14 @@ const handleSelectPhoto = () => {
       imageId: selectedPhoto.value.id
     }, '*')
   }
+}
+
+// Unicode解码函数
+const decodeUnicode = (str: string | undefined): string => {
+  if (!str) return ''
+  return str.replace(/U([0-9A-Fa-f]{4})/g, (_, code) => {
+    return String.fromCharCode(parseInt(code, 16))
+  })
 }
 </script>
 
@@ -770,8 +1019,8 @@ canvas:active {
   opacity: 0.7;
 }
 
-.reset-btn {
-  background: #4CAF50;
+.update-btn {
+  background: #2196F3;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -783,9 +1032,10 @@ canvas:active {
   margin-bottom: 16px;
 }
 
-.reset-btn:hover {
-  background: #45a049;
+.update-btn:hover {
+  background: #1976D2;
 }
+
 
 .help-text {
   font-size: 12px;
@@ -797,6 +1047,48 @@ canvas:active {
 .help-text p {
   margin: 4px 0;
   font-size: 11px;
+}
+
+/* 搜索状态显示 */
+.search-status {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: slideInDown 0.3s ease-out;
+}
+
+.status-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-icon {
+  font-size: 16px;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 /* 加载状态样式 */
@@ -978,16 +1270,105 @@ canvas:active {
 .detail-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .detail-tag {
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 6px 12px;
-  border-radius: 16px;
+  background: transparent;
+  color: #333;
+  padding: 0;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 元数据区域样式 */
+.detail-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-name-text {
+  flex: 1;
+}
+
+.detail-size {
   font-size: 12px;
+  color: #666;
+  font-weight: 400;
+}
+
+.metadata-section {
+  margin-bottom: 6px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border-left: none;
+}
+
+.metadata-section h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.metadata-item {
+  display: flex;
+  margin-bottom: 3px;
+  align-items: flex-start;
+}
+
+.metadata-key {
+  font-weight: 600;
+  color: #333;
+  min-width: 40px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.metadata-value {
+  color: #333;
+  flex: 1;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+/* 不同类型的标签样式 */
+.detail-tag.type-tag {
+  color: #333;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.detail-tag.phrase-tag {
+  color: #333;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tag-more {
+  color: #333;
+  font-style: italic;
+  padding: 0;
+  border-radius: 0;
+  font-size: 14px;
   font-weight: 500;
 }
 

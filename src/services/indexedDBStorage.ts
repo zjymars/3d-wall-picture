@@ -13,12 +13,25 @@ export interface StoredImageData {
   source_website?: string
   lastUpdated: number
   checksum?: string
+  // 新增的元数据字段
+  filename?: string
+  original_filename?: string
+  unique_id?: string
+  type_tags?: string[]
+  phrase_tags?: string[]
 }
 
 export interface StorageStats {
   totalImages: number
   lastSyncTime: number
   storageSize: number
+}
+
+export interface SearchStats {
+  totalImages: number
+  matchedImages: number
+  searchKeywords: string[]
+  searchTime: number
 }
 
 class IndexedDBImageStorage {
@@ -215,20 +228,124 @@ class IndexedDBImageStorage {
     }
   }
 
-  // 搜索图片
-  async searchImages(keyword: string): Promise<StoredImageData[]> {
+  // 搜索图片 - 增强版
+  async searchImages(keyword: string): Promise<{ results: StoredImageData[], stats: SearchStats }> {
+    const startTime = Date.now()
+    
     try {
       const allImages = await this.getAllImages()
-      const lowerKeyword = keyword.toLowerCase()
+      const lowerKeyword = keyword.toLowerCase().trim()
       
-      return allImages.filter(img => 
-        img.title.toLowerCase().includes(lowerKeyword) ||
-        img.description.toLowerCase().includes(lowerKeyword) ||
-        img.tags.some(tag => tag.toLowerCase().includes(lowerKeyword))
-      )
+      if (!lowerKeyword) {
+        return {
+          results: allImages,
+          stats: {
+            totalImages: allImages.length,
+            matchedImages: allImages.length,
+            searchKeywords: [],
+            searchTime: Date.now() - startTime
+          }
+        }
+      }
+      
+      // 分词搜索 - 支持多个关键词
+      const keywords = lowerKeyword.split(/\s+/).filter(k => k.length > 0)
+      
+      const filteredAndSortedResults = allImages.filter(img => {
+        // 为每个图片计算匹配分数
+        let score = 0
+        const searchTexts = [
+          img.title || '',
+          img.description || '',
+          img.filename || '',
+          img.original_filename || '',
+          img.format || '',
+          img.source_website || '',
+          ...(img.tags || []),
+          ...(img.type_tags || []),
+          ...(img.phrase_tags || [])
+        ].map(text => text.toLowerCase())
+        
+        // 检查每个关键词是否匹配
+        for (const keyword of keywords) {
+          let keywordMatched = false
+          
+          for (const text of searchTexts) {
+            if (text.includes(keyword)) {
+              score += 1
+              keywordMatched = true
+              break
+            }
+          }
+          
+          // 如果任何一个关键词没有匹配，则整个图片不匹配
+          if (!keywordMatched) {
+            return false
+          }
+        }
+        
+        return score > 0
+      }).sort((a, b) => {
+        // 按匹配度排序 - 计算每个图片的匹配分数
+        const getScore = (img: StoredImageData) => {
+          let score = 0
+          const searchTexts = [
+            img.title || '',
+            img.description || '',
+            img.filename || '',
+            img.original_filename || '',
+            img.format || '',
+            img.source_website || '',
+            ...(img.tags || []),
+            ...(img.type_tags || []),
+            ...(img.phrase_tags || [])
+          ].map(text => text.toLowerCase())
+          
+          for (const keyword of keywords) {
+            for (const text of searchTexts) {
+              if (text.includes(keyword)) {
+                // 标题和文件名匹配权重更高
+                if (text === (img.title || '').toLowerCase() || 
+                    text === (img.filename || '').toLowerCase() ||
+                    text === (img.original_filename || '').toLowerCase()) {
+                  score += 3
+                } else if (text === (img.description || '').toLowerCase()) {
+                  score += 2
+                } else {
+                  score += 1
+                }
+                break
+              }
+            }
+          }
+          return score
+        }
+        
+        return getScore(b) - getScore(a)
+      })
+      
+      const searchTime = Date.now() - startTime
+      
+      return {
+        results: filteredAndSortedResults,
+        stats: {
+          totalImages: allImages.length,
+          matchedImages: filteredAndSortedResults.length,
+          searchKeywords: keywords,
+          searchTime
+        }
+      }
     } catch (error) {
       console.error('❌ [IndexedDB错误] 搜索图片失败:', error)
-      return []
+      return {
+        results: [],
+        stats: {
+          totalImages: 0,
+          matchedImages: 0,
+          searchKeywords: [],
+          searchTime: Date.now() - startTime
+        }
+      }
     }
   }
 
@@ -365,7 +482,13 @@ class IndexedDBImageStorage {
       width: storedImage.width,
       height: storedImage.height,
       format: storedImage.format,
-      source_website: storedImage.source_website
+      source_website: storedImage.source_website,
+      // 新增的元数据字段
+      filename: storedImage.filename,
+      original_filename: storedImage.original_filename,
+      unique_id: storedImage.unique_id,
+      type_tags: storedImage.type_tags,
+      phrase_tags: storedImage.phrase_tags
     }
   }
 
@@ -382,8 +505,43 @@ class IndexedDBImageStorage {
       height: photo.height,
       format: photo.format,
       source_website: photo.source_website,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
+      // 新增的元数据字段
+      filename: photo.filename,
+      original_filename: photo.original_filename,
+      unique_id: photo.unique_id,
+      type_tags: photo.type_tags,
+      phrase_tags: photo.phrase_tags
     }
+  }
+
+  // 清空所有图片
+  async clearAllImages(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION)
+      
+      request.onsuccess = () => {
+        const db = request.result
+        const transaction = db.transaction([this.STORE_NAME], 'readwrite')
+        const store = transaction.objectStore(this.STORE_NAME)
+        const clearRequest = store.clear()
+        
+        clearRequest.onsuccess = () => {
+          console.log('✅ [IndexedDB] 所有图片已清空')
+          resolve()
+        }
+        
+        clearRequest.onerror = () => {
+          console.error('❌ [IndexedDB错误] 清空图片失败:', clearRequest.error)
+          reject(clearRequest.error)
+        }
+      }
+      
+      request.onerror = () => {
+        console.error('❌ [IndexedDB错误] 打开数据库失败:', request.error)
+        reject(request.error)
+      }
+    })
   }
 }
 

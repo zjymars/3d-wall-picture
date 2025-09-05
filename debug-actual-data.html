@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调试实际数据</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .data-item { margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; }
+        .key { font-weight: bold; color: #555; }
+        .value { color: #333; }
+        .missing { color: #f44336; background: #ffebee; }
+        .present { color: #4caf50; background: #e8f5e8; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 调试实际数据</h1>
+        
+        <div class="section">
+            <h3>🎯 调试说明</h3>
+            <p>这个页面检查实际存储的数据，看看为什么修改没有生效。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 调试操作</h3>
+            <button onclick="checkActualData()">检查实际数据</button>
+            <button onclick="simulateDisplay()">模拟显示逻辑</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function checkActualData() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🔍 实际数据检查</h3><p>正在检查...</p></div>';
+            
+            try {
+                // 检查localStorage
+                const stored = localStorage.getItem('image_storage');
+                const images = stored ? JSON.parse(stored) : [];
+                
+                if (images.length === 0) {
+                    resultsDiv.innerHTML = '<div class="section"><h3>🔍 实际数据检查</h3><div class="missing">localStorage中没有图片数据</div></div>';
+                    return;
+                }
+                
+                const firstImage = images[0];
+                
+                let html = '<div class="section"><h3>🔍 实际数据检查</h3>';
+                html += '<div class="present">✅ 找到图片数据</div>';
+                
+                // 检查关键字段
+                const fields = [
+                    { name: 'original_filename', value: firstImage.original_filename },
+                    { name: 'filename', value: firstImage.filename },
+                    { name: 'title', value: firstImage.title },
+                    { name: 'format', value: firstImage.format },
+                    { name: 'width', value: firstImage.width },
+                    { name: 'height', value: firstImage.height },
+                    { name: 'type_tags', value: firstImage.type_tags },
+                    { name: 'phrase_tags', value: firstImage.phrase_tags },
+                    { name: 'tags', value: firstImage.tags }
+                ];
+                
+                html += '<h4>🔍 字段检查:</h4>';
+                fields.forEach(field => {
+                    const hasValue = field.value !== undefined && field.value !== null && field.value !== '';
+                    const status = hasValue ? 'present' : 'missing';
+                    const icon = hasValue ? '✅' : '❌';
+                    const displayValue = hasValue ? JSON.stringify(field.value) : 'undefined/null/empty';
+                    
+                    html += `<div class="data-item ${status}">
+                        ${icon} ${field.name}: ${displayValue}
+                    </div>`;
+                });
+                
+                html += '<h4>📄 完整数据:</h4>';
+                html += `<pre>${JSON.stringify(firstImage, null, 2)}</pre>`;
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🔍 实际数据检查</h3><div class="missing">检查失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function simulateDisplay() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🎭 模拟显示逻辑</h3><p>正在模拟...</p></div>';
+            
+            try {
+                const stored = localStorage.getItem('image_storage');
+                const images = stored ? JSON.parse(stored) : [];
+                
+                if (images.length === 0) {
+                    resultsDiv.innerHTML = '<div class="section"><h3>🎭 模拟显示逻辑</h3><div class="missing">没有数据可模拟</div></div>';
+                    return;
+                }
+                
+                const firstImage = images[0];
+                
+                // 模拟显示逻辑
+                const displayValues = {
+                    '文件名': firstImage.original_filename || firstImage.filename || firstImage.title || '未知',
+                    '格式': firstImage.format || '未知',
+                    '图片尺寸': firstImage.width && firstImage.height ? `${firstImage.width} × ${firstImage.height}` : '未知',
+                    '标签': firstImage.type_tags || firstImage.tags?.slice(0, 5) || [],
+                    '描述性短语': firstImage.phrase_tags || []
+                };
+                
+                let html = '<div class="section"><h3>🎭 模拟显示逻辑</h3>';
+                html += '<div class="present">✅ 模拟显示结果</div>';
+                
+                Object.entries(displayValues).forEach(([key, value]) => {
+                    const displayValue = Array.isArray(value) ? 
+                        (value.length > 0 ? value.join(', ') : '无标签') : 
+                        value;
+                    
+                    html += `<div class="data-item">
+                        <span class="key">${key}:</span>
+                        <span class="value">${displayValue}</span>
+                    </div>`;
+                });
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🎭 模拟显示逻辑</h3><div class="missing">模拟失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            console.log('🔍 调试实际数据页面已加载');
+            setTimeout(() => {
+                checkActualData();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

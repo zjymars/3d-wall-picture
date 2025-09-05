@@ -63,9 +63,17 @@
             @click="handleSync"
             class="sync-btn"
             :disabled="isSyncing"
-            title="手动同步图片"
+            :title="`手动同步图片 (当前本地缓存${localImageCount}张)`"
           >
-            {{ isSyncing ? '同步中...' : '同步图片' }}
+            {{ isSyncing ? '同步中...' : `同步图片 (${localImageCount})` }}
+          </button>
+          <button
+            @click="handleClearAndSync"
+            class="clear-sync-btn"
+            :disabled="isSyncing"
+            title="清空本地存储并重新从服务端同步所有图片"
+          >
+            {{ isSyncing ? '同步中...' : '清空重同步' }}
           </button>
         </div>
       </div>
@@ -114,8 +122,26 @@ const isFetching = computed(() => store.isFetching)
 const highlightNodes = computed(() => store.highlightNodes)
 const isSyncing = computed(() => store.isSyncing)
 
+// 本地存储图片数量（用于按钮显示）
+const localImageCount = ref(0)
+
+// 获取本地存储图片数量
+const updateLocalImageCount = async () => {
+  try {
+    const stats = await store.getStorageStats()
+    localImageCount.value = stats.totalImages
+  } catch (error) {
+    console.error('获取本地图片数量失败:', error)
+    localImageCount.value = 0
+  }
+}
+
 // 搜索预设
 const searchPresets = [
+  '建筑', 
+  '风景', 
+  '人物', 
+  '动物',
   'winter', 
   'mathematical concepts', 
   'underwater animals', 
@@ -142,18 +168,37 @@ const handleClear = () => {
 
 const handleSync = async () => {
   try {
-    await store.manualSync()
+    // 获取同步前IndexedDB中的图片数量
+    const beforeCount = await store.getStorageStats()
+    console.log(`📊 [同步] 同步前IndexedDB图片数量: ${beforeCount.totalImages}`)
     
-    // 显示同步结果通知
-    syncNotification.value = {
-      show: true,
-      message: `同步完成！图片已更新`
+    // 执行同步并获取结果
+    const result = await store.manualSync()
+    
+    console.log(`📊 [同步] 同步结果:`, result)
+    
+    // 显示详细的同步结果通知
+    let message = ''
+    if (result.newImages > 0) {
+      message = `同步完成！本地缓存${result.totalImages}张，本次新增${result.newImages}张`
+    } else if (result.updatedImages > 0) {
+      message = `同步完成！本地缓存${result.totalImages}张，本次更新${result.updatedImages}张`
+    } else {
+      message = `同步完成！本地缓存${result.totalImages}张，没有新图片`
     }
     
-    // 1秒后隐藏通知
+    syncNotification.value = {
+      show: true,
+      message: message
+    }
+    
+    // 更新本地图片数量显示
+    await updateLocalImageCount()
+    
+    // 3秒后隐藏通知（因为信息较长）
     setTimeout(() => {
       syncNotification.value.show = false
-    }, 1000)
+    }, 3000)
     
   } catch (error) {
     console.error('手动同步失败:', error)
@@ -166,10 +211,68 @@ const handleSync = async () => {
     
     setTimeout(() => {
       syncNotification.value.show = false
-    }, 1000)
+    }, 2000)
   }
 }
 
+const handleClearAndSync = async () => {
+  try {
+    // 调试：检查store中可用的方法
+    console.log('🔍 [调试] Store对象:', store)
+    console.log('🔍 [调试] Store方法列表:', Object.getOwnPropertyNames(store))
+    console.log('🔍 [调试] clearAndSync类型:', typeof store.clearAndSync)
+    
+    // 检查方法是否存在
+    if (typeof store.clearAndSync !== 'function') {
+      console.error('❌ [调试] clearAndSync方法不存在')
+      console.error('❌ [调试] 可用的方法:', Object.keys(store).filter(key => typeof (store as any)[key] === 'function'))
+      throw new Error('clearAndSync方法不存在，请检查store导出')
+    }
+    
+    // 获取同步前IndexedDB中的图片数量
+    const beforeCount = await store.getStorageStats()
+    console.log(`📊 [清空重同步] 同步前IndexedDB图片数量: ${beforeCount.totalImages}`)
+    
+    // 执行清空并重新同步
+    const result = await store.clearAndSync()
+    
+    console.log(`📊 [清空重同步] 同步结果:`, result)
+    
+    // 获取同步后的实际统计信息
+    const afterStats = await store.getStorageStats()
+    console.log(`📊 [清空重同步] 同步后IndexedDB实际图片数量: ${afterStats.totalImages}`)
+    
+    // 显示详细的同步结果通知
+    const message = `清空重同步完成！本地缓存${afterStats.totalImages}张，重新下载${result.newImages}张`
+    
+    syncNotification.value = {
+      show: true,
+      message: message
+    }
+    
+    // 更新本地图片数量显示
+    await updateLocalImageCount()
+    
+    // 3秒后隐藏通知
+    setTimeout(() => {
+      syncNotification.value.show = false
+    }, 3000)
+    
+  } catch (error) {
+    console.error('清空重同步失败:', error)
+    
+    // 显示详细的错误通知
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    syncNotification.value = {
+      show: true,
+      message: `清空重同步失败: ${errorMessage}`
+    }
+    
+    setTimeout(() => {
+      syncNotification.value.show = false
+    }, 5000) // 延长显示时间，让用户有时间阅读错误信息
+  }
+}
 
 // 切换描述模式
 const toggleDescriptionMode = () => {
@@ -183,6 +286,8 @@ onMounted(async () => {
   // 应用启动时从本地存储加载图片
   try {
     await store.loadImagesFromLocal()
+    // 初始化本地图片数量显示
+    await updateLocalImageCount()
   } catch (error) {
     console.error('启动时加载图片失败:', error)
   }
@@ -362,6 +467,31 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
+.clear-sync-btn {
+  padding: 6px 12px;
+  background: rgba(255, 87, 34, 0.2);
+  color: #ff5722;
+  border: 1px solid rgba(255, 87, 34, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  margin-left: 8px;
+}
+
+.clear-sync-btn:hover:not(:disabled) {
+  background: rgba(255, 87, 34, 0.3);
+  border-color: rgba(255, 87, 34, 0.6);
+  transform: translateY(-1px);
+}
+
+.clear-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
 /* 同步通知样式 */
 .sync-notification {
   position: fixed;
@@ -377,6 +507,9 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
   z-index: 1001;
   animation: slideInUp 0.3s ease-out;
+  max-width: 400px;
+  word-wrap: break-word;
+  line-height: 1.4;
 }
 
 @keyframes slideInUp {

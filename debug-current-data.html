@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调试当前数据</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .data-item { margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; }
+        .key { font-weight: bold; color: #555; }
+        .value { color: #333; }
+        .missing { color: #f44336; background: #ffebee; }
+        .present { color: #4caf50; background: #e8f5e8; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 调试当前数据</h1>
+        
+        <div class="section">
+            <h3>🎯 调试操作</h3>
+            <button onclick="checkLocalStorage()">检查localStorage</button>
+            <button onclick="checkIndexedDB()">检查IndexedDB</button>
+            <button onclick="checkAPI()">检查API数据</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function checkLocalStorage() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>📂 localStorage检查</h3><p>正在检查...</p></div>';
+            
+            try {
+                const stored = localStorage.getItem('image_storage');
+                const images = stored ? JSON.parse(stored) : [];
+                
+                if (images.length === 0) {
+                    resultsDiv.innerHTML = '<div class="section"><h3>📂 localStorage检查</h3><div class="missing">localStorage中没有图片数据</div></div>';
+                    return;
+                }
+                
+                const firstImage = images[0];
+                displayDataAnalysis(firstImage, 'localStorage', resultsDiv);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>📂 localStorage检查</h3><div class="missing">检查失败: ${error.message}</div></div>`;
+            }
+        }
+
+        async function checkIndexedDB() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🗄️ IndexedDB检查</h3><p>正在检查...</p></div>';
+            
+            try {
+                // 尝试打开IndexedDB
+                const request = indexedDB.open('ImageStorage', 1);
+                
+                request.onsuccess = function(event) {
+                    const db = event.target.result;
+                    const transaction = db.transaction(['images'], 'readonly');
+                    const store = transaction.objectStore('images');
+                    const getAllRequest = store.getAll();
+                    
+                    getAllRequest.onsuccess = function() {
+                        const images = getAllRequest.result;
+                        
+                        if (images.length === 0) {
+                            resultsDiv.innerHTML = '<div class="section"><h3>🗄️ IndexedDB检查</h3><div class="missing">IndexedDB中没有图片数据</div></div>';
+                            return;
+                        }
+                        
+                        const firstImage = images[0];
+                        displayDataAnalysis(firstImage, 'IndexedDB', resultsDiv);
+                    };
+                    
+                    getAllRequest.onerror = function() {
+                        resultsDiv.innerHTML = '<div class="section"><h3>🗄️ IndexedDB检查</h3><div class="missing">获取IndexedDB数据失败</div></div>';
+                    };
+                };
+                
+                request.onerror = function() {
+                    resultsDiv.innerHTML = '<div class="section"><h3>🗄️ IndexedDB检查</h3><div class="missing">无法打开IndexedDB</div></div>';
+                };
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🗄️ IndexedDB检查</h3><div class="missing">检查失败: ${error.message}</div></div>`;
+            }
+        }
+
+        async function checkAPI() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🌐 API检查</h3><p>正在检查...</p></div>';
+            
+            try {
+                const response = await fetch('http://192.10.222.123:8001/api/v1/external/dataset-images/14');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const apiImage = await response.json();
+                displayDataAnalysis(apiImage, 'API', resultsDiv);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🌐 API检查</h3><div class="missing">检查失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function displayDataAnalysis(data, source, container) {
+            // 检查关键字段是否存在
+            const fields = {
+                'original_filename': data.original_filename,
+                'format': data.format,
+                'width': data.width,
+                'height': data.height,
+                'type_tags': data.type_tags,
+                'phrase_tags': data.phrase_tags
+            };
+            
+            let analysisHtml = `
+                <div class="section">
+                    <h3>📋 ${source} - 数据分析</h3>
+                    <div class="present">✅ 成功获取数据</div>
+                    
+                    <h4>🔍 字段检查:</h4>
+            `;
+            
+            Object.entries(fields).forEach(([key, value]) => {
+                const status = value !== undefined && value !== null && value !== '' ? 'present' : 'missing';
+                const statusText = status === 'present' ? '✅ 存在' : '❌ 缺失';
+                const displayValue = value !== undefined ? JSON.stringify(value) : 'undefined';
+                
+                analysisHtml += `
+                    <div class="data-item ${status}">
+                        <span class="key">${key}:</span>
+                        <span class="value">${statusText} - ${displayValue}</span>
+                    </div>
+                `;
+            });
+            
+            analysisHtml += `
+                    <h4>📄 完整数据:</h4>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+            
+            container.innerHTML = analysisHtml;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            console.log('🔍 调试页面已加载');
+            setTimeout(() => {
+                checkAPI();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

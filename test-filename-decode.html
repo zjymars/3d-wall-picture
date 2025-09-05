@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试文件名解码</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #f44336; }
+        .info { background: #e3f2fd; color: #1976d2; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔤 测试文件名解码</h1>
+        
+        <div class="section">
+            <h3>🎯 测试说明</h3>
+            <p>这个页面测试Unicode编码的文件名解码。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 测试操作</h3>
+            <button onclick="testDecode()">测试解码</button>
+            <button onclick="testAPI()">测试API数据</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Unicode解码函数
+        function decodeUnicode(str) {
+            return str.replace(/U([0-9A-Fa-f]{4})/g, function(match, code) {
+                return String.fromCharCode(parseInt(code, 16));
+            });
+        }
+
+        function testDecode() {
+            const resultsDiv = document.getElementById('results');
+            
+            const testCases = [
+                'U5730U666FU5EFAU7B51_0001.jpg',
+                'U5730U666FU5EFAU7B51_0002.jpg',
+                'U5730U666FU5EFAU7B51_0003.jpg'
+            ];
+            
+            let html = '<div class="section"><h3>🔤 解码测试结果</h3>';
+            
+            testCases.forEach(testCase => {
+                const decoded = decodeUnicode(testCase);
+                html += `<div class="test-result info">
+                    <strong>原始:</strong> ${testCase}<br>
+                    <strong>解码:</strong> ${decoded}
+                </div>`;
+            });
+            
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testAPI() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🌐 API测试</h3><p>正在测试...</p></div>';
+            
+            try {
+                const response = await fetch('http://192.10.222.123:8001/api/v1/external/dataset-images/14');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const apiImage = await response.json();
+                
+                let html = '<div class="section"><h3>🌐 API测试结果</h3>';
+                html += '<div class="test-result success">✅ 成功获取API数据</div>';
+                
+                html += '<h4>📄 文件名字段:</h4>';
+                html += `<div class="test-result info">
+                    <strong>original_filename:</strong> ${apiImage.original_filename}<br>
+                    <strong>filename:</strong> ${apiImage.filename}<br>
+                    <strong>解码后的original_filename:</strong> ${decodeUnicode(apiImage.original_filename)}
+                </div>`;
+                
+                html += '<h4>📄 完整数据:</h4>';
+                html += `<pre>${JSON.stringify(apiImage, null, 2)}</pre>`;
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🌐 API测试</h3><div class="test-result error">❌ 测试失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('🔤 文件名解码测试页面已加载');
+            setTimeout(() => {
+                testDecode();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

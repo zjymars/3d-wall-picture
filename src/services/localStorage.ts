@@ -13,6 +13,12 @@ export interface StoredImageData {
   source_website?: string
   lastUpdated: number
   checksum?: string
+  // 新增的元数据字段
+  filename?: string
+  original_filename?: string
+  unique_id?: number
+  type_tags?: string[]
+  phrase_tags?: string[]
 }
 
 export interface StorageStats {

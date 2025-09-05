@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>强制刷新测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #f44336; }
+        .info { background: #e3f2fd; color: #1976d2; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #45a049; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 强制刷新测试</h1>
+        
+        <div class="section">
+            <h3>🎯 测试说明</h3>
+            <p>这个页面帮助诊断为什么修改没有生效。我们将检查多个可能的原因。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 诊断操作</h3>
+            <button onclick="checkDevServer()">检查开发服务器</button>
+            <button onclick="checkFileModification()">检查文件修改时间</button>
+            <button onclick="checkBrowserCache()">检查浏览器缓存</button>
+            <button onclick="forceReload()">强制重新加载</button>
+            <button onclick="clearAllCache()">清空所有缓存</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function checkDevServer() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🖥️ 开发服务器检查</h3><p>正在检查...</p></div>';
+            
+            fetch('http://localhost:3001')
+                .then(response => {
+                    if (response.ok) {
+                        resultsDiv.innerHTML = '<div class="section"><h3>🖥️ 开发服务器检查</h3><div class="test-result success">✅ 开发服务器正在运行 (端口3001)</div></div>';
+                    } else {
+                        resultsDiv.innerHTML = '<div class="section"><h3>🖥️ 开发服务器检查</h3><div class="test-result error">❌ 开发服务器响应异常</div></div>';
+                    }
+                })
+                .catch(error => {
+                    resultsDiv.innerHTML = `<div class="section"><h3>🖥️ 开发服务器检查</h3><div class="test-result error">❌ 开发服务器未运行: ${error.message}</div></div>`;
+                });
+        }
+
+        function checkFileModification() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>📁 文件修改检查</h3><p>正在检查...</p></div>';
+            
+            // 检查关键文件是否存在修改
+            const files = [
+                'src/components/PhotoNode.vue',
+                'src/components/PhotoViz3D.vue',
+                'src/services/indexedDBStorage.ts'
+            ];
+            
+            let html = '<div class="section"><h3>📁 文件修改检查</h3>';
+            
+            files.forEach(file => {
+                html += `<div class="test-result info">📄 ${file} - 需要手动检查文件内容</div>`;
+            });
+            
+            html += '<div class="test-result info">💡 请检查这些文件是否包含最新的修改</div>';
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function checkBrowserCache() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🗄️ 浏览器缓存检查</h3><p>正在检查...</p></div>';
+            
+            // 检查缓存状态
+            const cacheStatus = {
+                'localStorage': localStorage.length,
+                'sessionStorage': sessionStorage.length,
+                'cookies': document.cookie.length,
+                'cacheAPI': 'caches' in window ? '支持' : '不支持'
+            };
+            
+            let html = '<div class="section"><h3>🗄️ 浏览器缓存检查</h3>';
+            
+            Object.entries(cacheStatus).forEach(([key, value]) => {
+                html += `<div class="test-result info">${key}: ${value}</div>`;
+            });
+            
+            html += '<div class="test-result info">💡 如果缓存过多，可能需要清空</div>';
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function forceReload() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🔄 强制重新加载</h3><div class="test-result info">正在强制重新加载页面...</div></div>';
+            
+            // 强制重新加载，忽略缓存
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 1000);
+        }
+
+        function clearAllCache() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🧹 清空所有缓存</h3><p>正在清空...</p></div>';
+            
+            try {
+                // 清空localStorage
+                localStorage.clear();
+                
+                // 清空sessionStorage
+                sessionStorage.clear();
+                
+                // 清空IndexedDB
+                if ('indexedDB' in window) {
+                    indexedDB.deleteDatabase('ImageStorage');
+                }
+                
+                resultsDiv.innerHTML = '<div class="section"><h3>🧹 清空所有缓存</h3><div class="test-result success">✅ 缓存已清空，请刷新页面</div></div>';
+                
+                setTimeout(() => {
+                    window.location.reload(true);
+                }, 2000);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🧹 清空所有缓存</h3><div class="test-result error">❌ 清空失败: ${error.message}</div></div>`;
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            console.log('🔄 强制刷新测试页面已加载');
+            setTimeout(() => {
+                checkDevServer();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

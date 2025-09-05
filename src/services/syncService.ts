@@ -14,6 +14,7 @@ export interface SyncOptions {
   forceSync?: boolean
   batchSize?: number
   maxImages?: number
+  clearLocal?: boolean  // 是否清空本地存储
 }
 
 class ImageSyncService {
@@ -60,17 +61,27 @@ class ImageSyncService {
       console.log('✅ [同步服务4] API连接测试成功')
 
       console.log('📂 [同步服务5] 获取本地存储信息...')
+      
+      // 如果设置了清空本地存储，先清空
+      if (options.clearLocal) {
+        console.log('🗑️ [同步服务5.1] 清空本地存储...')
+        await indexedDBImageStorage.clearAllImages()
+        console.log('✅ [同步服务5.2] 本地存储已清空')
+        
+        // 等待一小段时间确保清空操作完成
+        await new Promise(resolve => setTimeout(resolve, 100))
+        console.log('⏳ [同步服务5.3] 等待清空操作完成...')
+      }
+      
       // 获取本地存储的图片信息
       const localImages = await indexedDBImageStorage.getAllImages()
       const localImageIds = new Set(localImages.map(img => img.id))
       console.log(`📊 [同步服务6] 本地存储中有 ${localImages.length} 张图片`)
       
-      console.log('🌐 [同步服务7] 获取服务器图片组信息...')
-      // 获取服务器上的图片组信息
-      const imageGroupsResponse = await imageApi.getImageGroups(1, 50)
-      const imageGroups = imageGroupsResponse.data || []
-      console.log(`📋 [同步服务8] 发现 ${imageGroups.length} 个图片组`)
-      console.log('📋 [同步服务8.1] 图片组详情:', imageGroups.map(g => ({ id: g.id, name: g.name, count: g.image_count })))
+      console.log('🌐 [同步服务7] 获取服务器图片信息...')
+      // 获取服务器上的图片信息
+      const stats = await imageApi.getStats()
+      console.log(`📋 [同步服务8] 发现 ${stats.total_datasets} 个数据集，${stats.total_images} 张图片`)
 
       let newImages: StoredImageData[] = []
       let updatedImages = 0
@@ -78,21 +89,18 @@ class ImageSyncService {
       const maxImages = options.maxImages || 1000
       console.log(`⚙️ [同步服务9] 同步配置: batchSize=${batchSize}, maxImages=${maxImages}`)
 
-      // 遍历图片组，获取新图片
-      for (const group of imageGroups) {
-        if (newImages.length >= maxImages) {
-          console.log(`🛑 [同步服务10] 已达到最大图片数量限制 ${maxImages}`)
-          break
-        }
-        
+      // 分页获取所有图片
+      let currentPage = 1
+      const pageSize = 100
+      
+      while (newImages.length < maxImages) {
         try {
-          console.log(`📥 [同步服务11] 获取图片组 ${group.id} (${group.name}) 的图片...`)
-          // 获取该组的所有图片，而不是只获取batchSize数量的图片
-          const groupImagesResponse = await imageApi.getGroupImages(group.id, 1, group.image_count || 1000)
-          const groupImages = groupImagesResponse.data || []
-          console.log(`📊 [同步服务12] 图片组 ${group.id} 包含 ${groupImages.length} 张图片 (组内总数: ${group.image_count})`)
+          console.log(`📥 [同步服务11] 获取第 ${currentPage} 页图片...`)
+          const response = await imageApi.getDatasetImages(currentPage, pageSize)
+          const apiImages = response.images || []
+          console.log(`📊 [同步服务12] 第 ${currentPage} 页包含 ${apiImages.length} 张图片`)
           
-          for (const apiImage of groupImages) {
+          for (const apiImage of apiImages) {
             if (newImages.length >= maxImages) break
             
             const imageId = `photo-${apiImage.id}`
@@ -113,9 +121,16 @@ class ImageSyncService {
               }
             }
           }
+          
+          if (apiImages.length === 0) {
+            console.log('📄 [同步服务15] 没有更多图片，同步完成')
+            break
+          }
+          
+          currentPage++
         } catch (error) {
-          console.warn(`⚠️ [同步服务15] 获取图片组 ${group.id} 失败:`, error)
-          continue
+          console.warn(`⚠️ [同步服务15] 获取第 ${currentPage} 页图片失败:`, error)
+          break
         }
       }
 
@@ -165,15 +180,20 @@ class ImageSyncService {
       .replace(/[-_]/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase())
 
-    // 从图片组信息生成描述
-    const description = apiImage.group_info 
-      ? `${apiImage.group_info.name}: ${apiImage.group_info.description}`
-      : `来自 ${apiImage.source_website} 的图片`
+    // 从标签信息生成描述
+    const description = apiImage.natural_tags && apiImage.natural_tags.length > 0
+      ? apiImage.natural_tags[0]
+      : apiImage.phrase_tags && apiImage.phrase_tags.length > 0
+      ? apiImage.phrase_tags[0]
+      : `数据集 ${apiImage.dataset_id} 中的图片`
 
-    // 从图片组关键词生成标签
-    const tags = apiImage.group_info 
-      ? apiImage.group_info.description.split(/[,，\s]+/).filter(tag => tag.length > 0)
-      : [apiImage.source_website, apiImage.format]
+    // 合并所有标签
+    const allTags = [
+      ...(apiImage.type_tags || []),
+      ...(apiImage.phrase_tags || []),
+      apiImage.format,
+      `数据集${apiImage.dataset_id}`
+    ].filter(tag => tag && tag.length > 0)
 
     return {
       id: `photo-${apiImage.id}`,
@@ -181,19 +201,25 @@ class ImageSyncService {
       title,
       description,
       date: apiImage.created_at.split('T')[0],
-      tags: tags.slice(0, 5),
+      tags: allTags.slice(0, 8), // 增加标签数量
       width: apiImage.width,
       height: apiImage.height,
       format: apiImage.format,
-      source_website: apiImage.source_website,
+      source_website: `dataset-${apiImage.dataset_id}`,
       lastUpdated: Date.now(),
-      checksum: this.generateChecksum(apiImage)
+      checksum: this.generateChecksum(apiImage),
+      // 新增的元数据字段
+      filename: apiImage.filename,
+      original_filename: apiImage.original_filename,
+      unique_id: apiImage.id,
+      type_tags: apiImage.type_tags || [],
+      phrase_tags: apiImage.phrase_tags || []
     }
   }
 
   // 生成图片校验和
   private generateChecksum(apiImage: ImageData): string {
-    const data = `${apiImage.filename}-${apiImage.minio_url}-${apiImage.created_at}`
+    const data = `${apiImage.filename}-${apiImage.minio_url}-${apiImage.updated_at}-${apiImage.dataset_id}`
     let hash = 0
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i)

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试修改是否生效</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #f44336; }
+        .info { background: #e3f2fd; color: #1976d2; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .metadata-display { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .metadata-item { display: flex; margin-bottom: 8px; }
+        .metadata-key { font-weight: bold; min-width: 100px; color: #555; }
+        .metadata-value { color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 测试修改是否生效</h1>
+        
+        <div class="section">
+            <h3>🎯 测试说明</h3>
+            <p>这个页面模拟了修改后的显示逻辑，看看应该显示什么内容。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 测试操作</h3>
+            <button onclick="testWithMockData()">使用模拟数据测试</button>
+            <button onclick="testWithRealData()">使用真实数据测试</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // 模拟数据 - 包含新字段
+        const mockDataWithNewFields = {
+            id: 'photo-14',
+            url: 'http://example.com/image.jpg',
+            title: '地景建筑_0001',
+            description: '这是一个测试图片',
+            date: '2025-01-01',
+            tags: ['住宅', '现代主义', '傍晚', '乡村', '水边', 'JPG', '数据集3'],
+            width: 1920,
+            height: 1080,
+            format: 'JPG',
+            source_website: 'dataset-3',
+            // 新增的元数据字段
+            filename: '7ad134268e9e423fa6c6d3b8519e1be4.jpg',
+            original_filename: '地景建筑_0001.jpg',
+            unique_id: 14,
+            type_tags: ['住宅', '现代主义', '傍晚', '乡村', '水边'],
+            phrase_tags: ['超写实照片，山坡上的现代住宅，独特的半埋椭圆结构', '大玻璃幕墙发出温暖黄光']
+        };
+
+        // 模拟数据 - 缺少新字段（旧数据）
+        const mockDataWithoutNewFields = {
+            id: 'photo-14',
+            url: 'http://example.com/image.jpg',
+            title: '地景建筑_0001',
+            description: '这是一个测试图片',
+            date: '2025-01-01',
+            tags: ['住宅', '现代主义', '傍晚', '乡村', '水边', 'JPG', '数据集3'],
+            width: 1920,
+            height: 1080,
+            format: 'JPG',
+            source_website: 'dataset-3'
+            // 缺少新字段
+        };
+
+        function testWithMockData() {
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<div class="section"><h3>🧪 模拟数据测试</h3>';
+            
+            // 测试包含新字段的数据
+            html += '<h4>📊 包含新字段的数据:</h4>';
+            html += displayMetadata(mockDataWithNewFields);
+            
+            // 测试缺少新字段的数据
+            html += '<h4>📊 缺少新字段的数据:</h4>';
+            html += displayMetadata(mockDataWithoutNewFields);
+            
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testWithRealData() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="section"><h3>🔍 真实数据测试</h3><p>正在检查...</p></div>';
+            
+            try {
+                const stored = localStorage.getItem('image_storage');
+                const images = stored ? JSON.parse(stored) : [];
+                
+                if (images.length === 0) {
+                    resultsDiv.innerHTML = '<div class="section"><h3>🔍 真实数据测试</h3><div class="error">没有找到本地数据</div></div>';
+                    return;
+                }
+                
+                const firstImage = images[0];
+                
+                let html = '<div class="section"><h3>🔍 真实数据测试</h3>';
+                html += '<h4>📊 实际存储的数据:</h4>';
+                html += displayMetadata(firstImage);
+                html += '</div>';
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🔍 真实数据测试</h3><div class="error">测试失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function displayMetadata(photo) {
+            // 使用修改后的显示逻辑
+            const filename = photo.original_filename || photo.filename || photo.title || '未知';
+            const format = photo.format || '未知';
+            const dimensions = photo.width && photo.height ? `${photo.width} × ${photo.height}` : '未知';
+            const tags = photo.type_tags || photo.tags?.slice(0, 5) || [];
+            const phraseTags = photo.phrase_tags || [];
+            
+            return `
+                <div class="metadata-display">
+                    <div class="metadata-item">
+                        <span class="metadata-key">文件名:</span>
+                        <span class="metadata-value">${filename}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-key">格式:</span>
+                        <span class="metadata-value">${format}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-key">图片尺寸:</span>
+                        <span class="metadata-value">${dimensions}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-key">标签:</span>
+                        <span class="metadata-value">${tags.length > 0 ? tags.join(', ') : '无标签'}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-key">描述性短语:</span>
+                        <span class="metadata-value">${phraseTags.length > 0 ? phraseTags.slice(0, 3).join(', ') : '无标签'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('🧪 测试修改是否生效页面已加载');
+            setTimeout(() => {
+                testWithMockData();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试数据转换</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #333; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #f44336; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 测试数据转换</h1>
+        
+        <div class="section">
+            <h3>🎯 测试说明</h3>
+            <p>这个页面模拟了数据转换过程，测试从API数据到Photo格式的转换是否正确。</p>
+        </div>
+
+        <div class="section">
+            <h3>🔧 测试操作</h3>
+            <button onclick="testConversion()">测试数据转换</button>
+            <button onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // 模拟API数据
+        const mockApiData = {
+            id: 14,
+            dataset_id: 3,
+            original_image_id: null,
+            original_filename: "地景建筑_0001.jpg",
+            minio_object_name: "dataset_3_20250903_214255/7ad134268e9e423fa6c6d3b8519e1be4.jpg",
+            minio_url: "http://192.10.222.123:9000/dataset/dataset_3_20250903_214255/7ad134268e9e423fa6c6d3b8519e1be4.jpg",
+            filename: "7ad134268e9e423fa6c6d3b8519e1be4.jpg",
+            file_size: 0,
+            width: 1920,
+            height: 1080,
+            format: "JPG",
+            type_tags: ["住宅", "现代主义", "傍晚", "乡村", "水边"],
+            phrase_tags: ["超写实照片，山坡上的现代住宅，独特的半埋椭圆结构", "大玻璃幕墙发出温暖黄光"],
+            natural_tags: ["这是一张在傍晚时分拍摄的现代住宅的超写实照片"],
+            raw_annotation_data: {},
+            annotation_method: "auto",
+            annotation_model: null,
+            confidence_score: 0.0,
+            quality_score: null,
+            is_verified: false,
+            verification_notes: null,
+            image_metadata: null,
+            created_at: "2025-09-03T13:42:56",
+            updated_at: "2025-09-03T13:42:56"
+        };
+
+        // 模拟StoredImageData
+        const mockStoredData = {
+            id: "photo-14",
+            url: "http://192.10.222.123:9000/dataset/dataset_3_20250903_214255/7ad134268e9e423fa6c6d3b8519e1be4.jpg",
+            title: "地景建筑_0001",
+            description: "这是一张在傍晚时分拍摄的现代住宅的超写实照片",
+            date: "2025-09-03",
+            tags: ["住宅", "现代主义", "傍晚", "乡村", "水边", "JPG", "数据集3"],
+            width: 1920,
+            height: 1080,
+            format: "JPG",
+            source_website: "dataset-3",
+            lastUpdated: Date.now(),
+            checksum: "123456789",
+            // 新增的元数据字段
+            filename: "7ad134268e9e423fa6c6d3b8519e1be4.jpg",
+            original_filename: "地景建筑_0001.jpg",
+            unique_id: 14,
+            type_tags: ["住宅", "现代主义", "傍晚", "乡村", "水边"],
+            phrase_tags: ["超写实照片，山坡上的现代住宅，独特的半埋椭圆结构", "大玻璃幕墙发出温暖黄光"]
+        };
+
+        // 模拟toPhotoFormat函数
+        function toPhotoFormat(storedImage) {
+            return {
+                id: storedImage.id,
+                url: storedImage.url,
+                title: storedImage.title,
+                description: storedImage.description,
+                date: storedImage.date,
+                tags: storedImage.tags,
+                width: storedImage.width,
+                height: storedImage.height,
+                format: storedImage.format,
+                source_website: storedImage.source_website,
+                // 新增的元数据字段
+                filename: storedImage.filename,
+                original_filename: storedImage.original_filename,
+                unique_id: storedImage.unique_id,
+                type_tags: storedImage.type_tags,
+                phrase_tags: storedImage.phrase_tags
+            };
+        }
+
+        function testConversion() {
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                // 测试转换
+                const convertedPhoto = toPhotoFormat(mockStoredData);
+                
+                // 检查关键字段
+                const checks = [
+                    { name: 'original_filename', value: convertedPhoto.original_filename, expected: '地景建筑_0001.jpg' },
+                    { name: 'format', value: convertedPhoto.format, expected: 'JPG' },
+                    { name: 'width', value: convertedPhoto.width, expected: 1920 },
+                    { name: 'height', value: convertedPhoto.height, expected: 1080 },
+                    { name: 'type_tags', value: convertedPhoto.type_tags, expected: ['住宅', '现代主义', '傍晚', '乡村', '水边'] },
+                    { name: 'phrase_tags', value: convertedPhoto.phrase_tags, expected: ['超写实照片，山坡上的现代住宅，独特的半埋椭圆结构', '大玻璃幕墙发出温暖黄光'] }
+                ];
+                
+                let html = '<div class="section"><h3>🧪 转换测试结果</h3>';
+                
+                let allPassed = true;
+                checks.forEach(check => {
+                    const passed = JSON.stringify(check.value) === JSON.stringify(check.expected);
+                    const status = passed ? 'success' : 'error';
+                    const icon = passed ? '✅' : '❌';
+                    
+                    html += `<div class="test-result ${status}">
+                        ${icon} ${check.name}: ${passed ? '通过' : '失败'}
+                        <br>实际值: ${JSON.stringify(check.value)}
+                        <br>期望值: ${JSON.stringify(check.expected)}
+                    </div>`;
+                    
+                    if (!passed) allPassed = false;
+                });
+                
+                html += `<div class="test-result ${allPassed ? 'success' : 'error'}">
+                    ${allPassed ? '✅' : '❌'} 总体结果: ${allPassed ? '所有测试通过' : '部分测试失败'}
+                </div>`;
+                
+                html += '<h4>📄 转换后的完整数据:</h4>';
+                html += `<pre>${JSON.stringify(convertedPhoto, null, 2)}</pre>`;
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="section"><h3>🧪 转换测试结果</h3><div class="test-result error">❌ 转换失败: ${error.message}</div></div>`;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('🧪 数据转换测试页面已加载');
+            setTimeout(() => {
+                testConversion();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

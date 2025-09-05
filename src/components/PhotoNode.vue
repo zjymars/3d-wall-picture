@@ -25,53 +25,50 @@
       </div>
     </div>
     
-    <!-- 图片标题 -->
-    <div class="photo-title">{{ photo.title }}</div>
+    <!-- 图片名称和尺寸 -->
+    <div class="photo-title">
+      <span class="photo-name">{{ decodeUnicode(photo.original_filename) || photo.filename || photo.title || '未知' }}</span>
+      <span class="photo-size">{{ photo.width && photo.height ? `${photo.width} × ${photo.height}` : '' }}</span>
+    </div>
     
     <!-- 描述内容区域 -->
     <div class="description-container" :class="{ 'expanded': shouldShowDescription }">
       <div class="description-content">
         <!-- 元数据键值对展示 -->
         <div class="metadata-grid">
+          <!-- 标签 -->
           <div class="metadata-item">
-            <span class="metadata-key">标题:</span>
-            <span class="metadata-value">{{ photo.title }}</span>
-          </div>
-          
-          <div class="metadata-item">
-            <span class="metadata-key">描述:</span>
-            <span class="metadata-value">{{ photo.description }}</span>
-          </div>
-          
-          <div class="metadata-item">
-            <span class="metadata-key">日期:</span>
-            <span class="metadata-value">{{ photo.date }}</span>
-          </div>
-          
-          <div class="metadata-item" v-if="photo.width && photo.height">
-            <span class="metadata-key">尺寸:</span>
-            <span class="metadata-value">{{ photo.width }} × {{ photo.height }}</span>
-          </div>
-          
-          <div class="metadata-item" v-if="photo.format">
-            <span class="metadata-key">格式:</span>
-            <span class="metadata-value">{{ photo.format }}</span>
-          </div>
-          
-          <div class="metadata-item" v-if="photo.source_website">
-            <span class="metadata-key">来源:</span>
-            <span class="metadata-value">{{ photo.source_website }}</span>
-          </div>
-          
-          <div class="metadata-item" v-if="photo.tags && photo.tags.length > 0">
             <span class="metadata-key">标签:</span>
             <div class="metadata-tags">
               <span 
-                v-for="tag in photo.tags" 
+                v-for="tag in (photo.type_tags || photo.tags?.slice(0, 5) || [])" 
                 :key="tag" 
-                class="tag"
+                class="tag type-tag"
               >
                 {{ tag }}
+              </span>
+              <span v-if="(!photo.type_tags || photo.type_tags.length === 0) && (!photo.tags || photo.tags.length === 0)" class="tag-more">
+                无标签
+              </span>
+            </div>
+          </div>
+          
+          <!-- 简介 -->
+          <div class="metadata-item">
+            <span class="metadata-key">简介:</span>
+            <div class="metadata-tags">
+              <span 
+                v-for="tag in (photo.phrase_tags || []).slice(0, 3)" 
+                :key="tag" 
+                class="tag phrase-tag"
+              >
+                {{ tag }}
+              </span>
+              <span v-if="photo.phrase_tags && photo.phrase_tags.length > 3" class="tag-more">
+                +{{ photo.phrase_tags.length - 3 }} 更多
+              </span>
+              <span v-if="!photo.phrase_tags || photo.phrase_tags.length === 0" class="tag-more">
+                无标签
               </span>
             </div>
           </div>
@@ -123,6 +120,14 @@ const toggleDescription = () => {
 const handlePhotoClick = () => {
   emit('photoClick', props.photo)
 }
+
+// Unicode解码函数
+const decodeUnicode = (str: string | undefined): string => {
+  if (!str) return ''
+  return str.replace(/U([0-9A-Fa-f]{4})/g, (_, code) => {
+    return String.fromCharCode(parseInt(code, 16))
+  })
+}
 </script>
 
 <style scoped>
@@ -168,6 +173,19 @@ const handlePhotoClick = () => {
   color: #333;
   line-height: 1.4;
   background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.photo-name {
+  flex: 1;
+}
+
+.photo-size {
+  font-size: 12px;
+  color: #666;
+  font-weight: 400;
 }
 
 /* 描述按钮 */
@@ -242,21 +260,24 @@ const handlePhotoClick = () => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
+  margin-bottom: 3px;
 }
 
 .metadata-key {
   font-weight: 600;
   color: #333;
-  min-width: 60px;
+  min-width: 40px;
   flex-shrink: 0;
+  font-size: 14px;
 }
 
 .metadata-value {
-  color: #555;
+  color: #333;
   flex: 1;
   word-break: break-word;
+  font-size: 14px;
 }
 
 .metadata-tags {
@@ -267,12 +288,24 @@ const handlePhotoClick = () => {
 }
 
 .tag {
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 10px;
+  color: #333;
+  padding: 2px 4px;
+  font-size: 14px;
   font-weight: 500;
+}
+
+/* 不同类型的标签样式 */
+.type-tag {
+  color: #333;
+}
+
+.phrase-tag {
+  color: #333;
+}
+
+.tag-more {
+  color: #333;
+  font-style: italic;
 }
 
 /* 响应式设计 */
